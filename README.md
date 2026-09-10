@@ -34,7 +34,7 @@
 ## 快速安装
 
 ```bash
-git clone https://github.com/dizhu/wechat-codex-code.git ~/Code/wechat-codex-code
+git clone https://github.com/Randy0609/wechat-codex-code.git ~/Code/wechat-codex-code
 cd ~/Code/wechat-codex-code && npm install
 ```
 
@@ -70,6 +70,37 @@ npm run daemon -- stop      # 停止服务
 npm run daemon -- restart   # 重启服务（更新代码或新增成员后使用）
 npm run daemon -- logs      # 查看日志
 ```
+
+## Codex 版本升级与连接排障
+
+微信桥接通过后台服务的 `PATH` 启动独立的 `codex` CLI。桌面应用能正常使用，不能证明桥接调用的 CLI 也已更新。
+
+如果微信回复 `The 'gpt-6-astra' model requires a newer version of Codex`，先检查后台服务实际使用的 CLI 路径和版本。2026-09-10 的本机排障中，CLI 0.144.5 遇到此错误，升级到 0.154.0 后，新建对话和继续对话均通过 gpt-6-astra 调用测试。这是已验证的版本组合，不代表最低版本要求。
+
+对于通过 npm 全局安装的 CLI，在桥接所在机器执行：
+
+```bash
+command -v codex
+codex --version
+npm install -g @openai/codex@latest
+codex --version
+```
+
+如果机器安装了多份 CLI，应同时检查 macOS LaunchAgent 或 Linux systemd 服务里的 `PATH`，确保更新的是后台服务实际调用的那一份。只更新桥接仓库的 npm 依赖不会升级全局 Codex CLI。
+
+更新桥接代码后，在仓库目录执行：
+
+```bash
+git pull --ff-only
+npm ci
+npm test
+npm run daemon -- restart
+npm run daemon -- logs
+```
+
+`npm ci` 会通过 `postinstall` 编译源码。此版本修复了沙箱与审批参数在 `exec` / `exec resume` 中的顺序，并将已知的实验功能提示和技能描述缩短提示作为非致命通知处理；认证失败、模型版本错误等真实错误仍会报告。
+
+最终验收应从手机微信发送一条唯一的测试消息，并确认收到相应回复。仅进程运行或本地模型测试成功，不算完成微信端到端验收。无需为此删除账号、会话或同步游标。
 
 ## 多人 / 团队使用
 

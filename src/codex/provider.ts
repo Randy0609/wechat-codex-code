@@ -67,8 +67,17 @@ function cleanupTempFiles(paths: string[]): void {
   }
 }
 
-function isNonFatalCodexNotice(message: string): boolean {
-  return message.startsWith('Skill descriptions were shortened to fit the 2% skills context budget.');
+export function isNonFatalCodexNotice(message: string): boolean {
+  if (message === 'Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest.') {
+    return true;
+  }
+
+  if (message.startsWith('Skill descriptions were shortened to fit the 2% skills context budget.')) {
+    return true;
+  }
+
+  return message.startsWith('Under-development features enabled:')
+    && message.includes('suppress_unstable_features_warning = true');
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +85,7 @@ function isNonFatalCodexNotice(message: string): boolean {
 // ---------------------------------------------------------------------------
 
 export async function codexQuery(options: QueryOptions): Promise<QueryResult> {
+  const startedAt = Date.now();
   const {
     prompt,
     cwd,
@@ -117,6 +127,7 @@ export async function codexQuery(options: QueryOptions): Promise<QueryResult> {
     '--json',
     '--skip-git-repo-check',
   ];
+  const codexOptions: string[] = [];
   // Sandbox policy. Default keeps the historical behavior — full access, no
   // approvals — which is what a remote coding agent typically needs and what
   // existing setups rely on. A security-conscious operator can set WCX_SANDBOX
@@ -130,7 +141,9 @@ export async function codexQuery(options: QueryOptions): Promise<QueryResult> {
     // Unset: historical default — full access, no approvals.
     common.push('--dangerously-bypass-approvals-and-sandbox');
   } else if (SANDBOX_MODES.includes(sandboxMode)) {
-    common.push('--sandbox', sandboxMode, '--ask-for-approval', 'never');
+    // Approval policy is a top-level Codex option, and the sandbox option must
+    // also precede `exec resume` because that subcommand does not accept it.
+    codexOptions.push('--sandbox', sandboxMode, '--ask-for-approval', 'never');
   } else {
     // Set but invalid (e.g. a typo like `readonly`): the operator clearly meant
     // to confine Codex, so FAIL SAFE to the most restrictive mode rather than
@@ -140,14 +153,14 @@ export async function codexQuery(options: QueryOptions): Promise<QueryResult> {
       value: sandboxMode,
       validModes: SANDBOX_MODES,
     });
-    common.push('--sandbox', 'read-only', '--ask-for-approval', 'never');
+    codexOptions.push('--sandbox', 'read-only', '--ask-for-approval', 'never');
   }
   if (model) common.push('--model', model);
   for (const p of tempImagePaths) common.push('--image', p);
 
   const args: string[] = resume
-    ? ['exec', 'resume', resume, ...common, '-']
-    : ['exec', ...common, '-'];
+    ? [...codexOptions, 'exec', 'resume', resume, ...common, '-']
+    : [...codexOptions, 'exec', ...common, '-'];
 
   // Accumulators
   let sessionId = '';
@@ -390,6 +403,7 @@ export async function codexQuery(options: QueryOptions): Promise<QueryResult> {
         sessionId,
         textLength: fullText.length,
         hasError: !!errorMessage,
+        durationMs: Date.now() - startedAt,
       });
 
       finish({

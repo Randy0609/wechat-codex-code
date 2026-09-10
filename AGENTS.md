@@ -19,10 +19,12 @@ layer was swapped from `claude` to `codex` (`src/codex/`).
 - `npm run daemon -- start|stop|restart|status|logs` — manage the launchd/systemd daemon.
   Use `restart` after `npm run build` to load changes.
 - `npm run setup` — QR-bind a WeChat account (each run binds one more bot).
-- `npm test` — **no real tests exist**. Verify changes by `build` + smoke-testing the
-  provider, or `restart` + reading logs.
+- `npm test` — run the provider notice regression tests after `npm run build`.
+  Also smoke-test the provider for CLI compatibility changes.
 
-There is no lint step and no unit-test suite. The compiler (`strict: true`) is the only gate.
+There is no lint step. Run the TypeScript compiler (`strict: true`) and the unit tests.
+Restart the daemon only from the actual deployed checkout, never from a temporary
+review or publishing clone; inspect deployed logs after loading runtime changes.
 
 ## Architecture
 
