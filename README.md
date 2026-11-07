@@ -23,6 +23,7 @@
 | **消息不刷屏** | 默认只推 Codex 的最终回复；中间的思考、命令执行噪音自动过滤（可选开启命令进度）。 |
 | **"对方正在输入中..."** | Codex 处理任务时，微信顶部显示输入状态。超过 5 分钟无响应自动安抚。 |
 | **文件双向收发** | 发图片 / Word / PDF 给 Codex 分析；Codex 生成的文件也会自动推送回微信。 |
+| **Grok Bot** | 可为一个微信机器人接入 Grok Bot Routine，使用 `/grok` 或 `COO` 显式派单并接收文字回复。 |
 
 ## 前置条件
 
@@ -70,6 +71,40 @@ npm run daemon -- stop      # 停止服务
 npm run daemon -- restart   # 重启服务（更新代码或新增成员后使用）
 npm run daemon -- logs      # 查看日志
 ```
+
+## 可选接入 Grok Bot
+
+普通消息继续走 Codex。启用后，指定微信机器人的绑定者可以发送
+`/grok 帮我摘要这段话：…`，或使用 `COO`、`@COO` 加空格或冒号。桥接只向
+Grok Bot 发送本条命令的正文和任务编号。附件和语音走原有路径。
+
+1. 在 Grok Bot 桌面端给目标 Bot 创建专用 [Webhook Routine](https://docs.x.ai/grok-bot/skills-routines-and-automations#webhooks)。
+2. 在桥接宿主机的 `~/.wechat-codex-code/grok-bot/`（目录权限 `0700`）内创建
+   `config.json`（权限 `0600`）。使用 `umask 077` 后再创建文件。在本机编辑器中将占位符替换为实际值。
+   使用 `WCX_DATA_DIR` 时，服务和回传命令应使用同一个数据目录。
+
+   ```json
+   {
+     "accountId": "<微信桥启动时显示的目标 Bot ID>",
+     "webhookUrl": "<Routine 的 POST to>",
+     "webhookKey": "<Routine 的 key>"
+   }
+   ```
+
+3. 让 Routine 读取 webhook JSON 中的 `text` 和 `task_id`，按你授予的范围处理。
+   完成后使用 Grok Bot 桌面端的本机执行能力，在**运行微信桥的机器**上执行
+   `node /你的路径/wechat-codex-code/dist/tools/grok-reply.js`。
+   以 JSON 通过标准输入传入原始 `task_id` 和最多 3900 字符的 `text`。
+   用 JSON 序列化生成输入，避免把消息正文当作 shell 代码。按当前本机审批设置批准这条回传命令。
+   桥接使用派单时捕获的原微信会话，Routine 无需接触微信 ID、Token 或任何对外监听端口。
+4. 构建并从实际部署目录重启服务。用一条不含私密信息的 `/grok` 消息试跑，
+   分别核对 Routine 运行记录、回传命令和手机收到的回复。
+
+Webhook HTTP 200 表示 Routine 已启动。回传命令提示已入队后，桥接仍需向微信提交回复。
+宿主机、微信桥和有效微信登录需要在同一次请求的 30 分钟内可用。重启会丢失在途任务的
+微信回复上下文，需在查过旧任务运行记录后发送新请求。网络结果不明确时桥接保留回复窗口，
+同一条微信消息不会自动再次派单。`/stop` 控制本机 Codex，已经启动的 Routine 由 Grok Bot 管理。
+任务元数据保留在私有目录中，方便按任务编号查找派单和回传状态。
 
 ## Codex 版本升级与连接排障
 

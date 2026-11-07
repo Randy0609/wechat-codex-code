@@ -11,6 +11,7 @@
     "dev": "tsc --watch",
     "test": "node --test dist/tests/*.test.js",
     "setup": "node dist/main.js setup",
+    "grok:reply": "node dist/tools/grok-reply.js",
     "daemon": "bash scripts/daemon.sh",
     "visualize": "npx tsx src/tools/visualize-logs.ts"
   },
