@@ -35,9 +35,9 @@ export function redact(obj: unknown): string {
   // Mask sensitive JSON string values by key name. Matches snake_case,
   // camelCase and kebab-case keys whose name contains a sensitive substring
   // (token, secret, password, api[-_]?key, aes[-_]?key, EncodingAESKey,
-  // credential, authorization, signature).
+  // credential, authorization, signature, qrcode).
   safe = safe.replace(
-    /"([^"]*?(?:token|secret|password|api[-_]?key|aes[-_]?key|encodingaeskey|credential|authorization|signature)[^"]*?)"\s*:\s*"[^"]*"/gi,
+    /"([^"]*?(?:token|secret|password|api[-_]?key|aes[-_]?key|encodingaeskey|credential|authorization|signature|qrcode)[^"]*?)"\s*:\s*"[^"]*"/gi,
     (_match, key: string) => `"${key}": "***"`,
   );
   // Mask credentials embedded in URLs (userinfo form: scheme://user:pass@host).
@@ -46,7 +46,7 @@ export function redact(obj: unknown): string {
   safe = safe.replace(/([a-z][a-z0-9+.\-]{0,32}:\/\/)[^/@\s"]{1,256}@/gi, "$1***@");
   // Mask sensitive query-string parameters (?token=…, &key=…, …); bounded classes.
   safe = safe.replace(
-    /([?&][^=&\s"]{0,64}(?:token|secret|key|password|signature)[^=&\s"]{0,64}=)[^&\s"]{1,512}/gi,
+    /([?&][^=&\s"]{0,64}(?:token|secret|key|password|signature|qrcode)[^=&\s"]{0,64}=)[^&\s"]{1,512}/gi,
     "$1***",
   );
   return safe;

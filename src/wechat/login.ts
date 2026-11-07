@@ -41,7 +41,8 @@ export async function startQrLogin(): Promise<{ qrcodeUrl: string; qrcodeId: str
     throw new Error(`Failed to get QR code (ret=${data.ret})`);
   }
 
-  logger.info('QR code obtained', { qrcodeId: data.qrcode });
+  // The QR id is a live login credential (polling it yields the bot token) — never log it.
+  logger.info('QR code obtained');
 
   return {
     qrcodeUrl: data.qrcode_img_content,
@@ -60,7 +61,7 @@ export async function waitForQrScan(qrcodeId: string): Promise<AccountData> {
   while (true) {
     const url = `${QR_STATUS_URL}?qrcode=${encodeURIComponent(currentQrcodeId)}`;
 
-    logger.debug('Polling QR status', { qrcodeId: currentQrcodeId });
+    logger.debug('Polling QR status');
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 60_000);
