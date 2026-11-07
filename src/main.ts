@@ -17,6 +17,7 @@ import { routeCommand, type CommandContext, type CommandResult } from './command
 import { codexQuery, type QueryOptions } from './codex/provider.js';
 import { loadConfig, saveConfig } from './config.js';
 import { logger } from './logger.js';
+import { GrokBot, grokPrompt, loadGrokConfig } from './grok-bot.js';
 import { DATA_DIR, DEFAULT_WORKING_DIR, SILENCE_MESSAGES, expandTilde } from './constants.js';
 import { MessageType, type WeixinMessage } from './wechat/types.js';
 
@@ -264,12 +265,24 @@ async function runDaemon(): Promise<void> {
   if (usable.length === 0) process.exit(1);
 
   const sessionStore = createSessionStore();
-  const monitors = usable.map((account) => createBotMonitor(account, sessionStore, config));
+  const grokConfig = loadGrokConfig();
+  let grok: GrokBot | undefined;
+  if (grokConfig && usable.some(account => account.accountId === grokConfig.accountId)) {
+    try {
+      grok = new GrokBot(grokConfig, undefined, undefined, () => logger.warn('Grok Bot reply processing failed'));
+    } catch {
+      logger.warn('Grok Bot unavailable');
+    }
+  }
+  const monitors = usable.map(account => createBotMonitor(
+    account, sessionStore, config, account.accountId === grokConfig?.accountId ? grok : undefined,
+  ));
 
   // -- Graceful shutdown --
 
   function shutdown(): void {
     logger.info('Shutting down...');
+    grok?.close();
     for (const m of monitors) m.stop();
     process.exit(0);
   }
@@ -324,6 +337,7 @@ function createBotMonitor(
   account: AccountData,
   sessionStore: ReturnType<typeof createSessionStore>,
   config: ReturnType<typeof loadConfig>,
+  grok?: GrokBot,
 ): ReturnType<typeof createMonitor> {
   const api = new WeChatApi(account.botToken, account.baseUrl);
   const sender = createSender(api, account.accountId);
@@ -477,6 +491,19 @@ function createBotMonitor(
         return;
       }
       if (handlePriorityCommand(msg)) return;
+      const prompt = grokPrompt(msg, owner, !!grok);
+      if (prompt !== undefined) {
+        const contextToken = msg.context_token;
+        if (!contextToken) return;
+        const send = (text: string) => sender.sendText(userId, contextToken, text);
+        const task = grok && msg.message_id !== undefined
+          ? grok.submit(msg.message_id, prompt, send)
+          : Promise.resolve(grok ? '当前消息缺少微信消息编号。' : '此微信机器人尚未配置 Grok Bot。');
+        void task.then(reply => {
+          if (reply) return send(reply);
+        }).catch(() => logger.warn('Grok Bot request failed'));
+        return;
+      }
       getRuntime(userId).queue.push(msg);
       drainQueue(userId).catch((err) => {
         logger.error('Queue drain failed', { userId, error: err instanceof Error ? err.message : String(err) });

@@ -149,8 +149,12 @@ export class WeChatApi {
 
     let delay = WeChatApi.SEND_INITIAL_BACKOFF_MS;
     for (let attempt = 0; attempt <= WeChatApi.SEND_MAX_RETRIES; attempt++) {
-      const res = await this.request<{ ret?: number }>('ilink/bot/sendmessage', req);
-      if (res.ret === -2) {
+      const res = await this.request<{ ret?: number; errcode?: number }>('ilink/bot/sendmessage', req);
+      if (!res || typeof res !== 'object' || Array.isArray(res)) {
+        throw new Error('sendMessage returned an invalid response');
+      }
+      const errorCode = res.ret || res.errcode;
+      if (errorCode === -2) {
         if (userId) {
           this.nextSendTime.set(userId, Date.now() + delay + WeChatApi.MIN_SEND_INTERVAL);
         }
@@ -167,8 +171,8 @@ export class WeChatApi {
       // session) means the message was NOT delivered. Throw so callers don't
       // silently report success while the user receives nothing — the error
       // then surfaces (and, for files, hits the retry/notify path in main.ts).
-      if (res.ret != null && res.ret !== 0) {
-        throw new Error(`sendMessage failed with ret:${res.ret}`);
+      if (errorCode != null && errorCode !== 0) {
+        throw new Error('sendMessage returned a non-success code');
       }
       return;
     }
